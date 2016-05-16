@@ -737,6 +737,7 @@ class Connection(object):
 
     def close(self):
         """Close the socket without sending quit message."""
+        self._remove_query_timeout()
         stream = self._stream
         if stream is None:
             return
@@ -745,7 +746,8 @@ class Connection(object):
 
     @gen.coroutine
     def close_async(self):
-        """Send the quit message and close the socket"""
+        """Send the quit message and close the socket.
+        There should be no timeout set in async close path."""
         if self._stream is None or self._stream.closed():
             self._stream = None
             return
@@ -849,10 +851,14 @@ class Connection(object):
             print("DEBUG: sending query:", sql)
         if isinstance(sql, text_type) and not (JYTHON or IRONPYTHON):
             sql = sql.encode(self.encoding)
+
         self._add_query_timeout()
-        yield self._execute_command(COMMAND.COM_QUERY, sql)
-        yield self._read_query_result(unbuffered=unbuffered)
-        self._remove_query_timeout()
+        try:
+            yield self._execute_command(COMMAND.COM_QUERY, sql)
+            yield self._read_query_result(unbuffered=unbuffered)
+        finally:
+            self._remove_query_timeout()
+
         raise gen.Return(self._affected_rows)
 
     @gen.coroutine
@@ -1166,8 +1172,9 @@ class Connection(object):
             self.io_loop.remove_timeout(self.timeout_handler)
 
     def _close_socket_on_timeout(self):
-        exc = iostream.StreamClosedError("Query timeout")
-        self._stream.close(exc_info=(None, exc, None))
+        if self._stream is not None:
+            exc = iostream.StreamClosedError("Query timeout")
+            self._stream.close(exc_info=(None, exc, None))
 
     Warning = Warning
     Error = Error
