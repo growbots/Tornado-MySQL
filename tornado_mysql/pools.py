@@ -11,7 +11,7 @@ from tornado.concurrent import Future
 
 from tornado_mysql import connect
 from tornado_mysql.connections import Connection
-from tornado_mysql.err import OperationalError
+from tornado_mysql.err import OperationalError, InternalError
 
 
 log = logging.getLogger("tornado_mysql.pools")
@@ -123,7 +123,7 @@ class Pool(object):
         """
         try:
             conn = yield self._get_conn()
-        except OperationalError:
+        except (OperationalError, InternalError):
             self._after_close()
             raise
 
@@ -149,7 +149,7 @@ class Pool(object):
         """
         try:
             conn = yield self._get_conn()
-        except OperationalError:
+        except (OperationalError, InternalError):
             self._after_close()
             raise
 
